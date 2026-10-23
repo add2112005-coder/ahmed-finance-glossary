@@ -10,7 +10,7 @@ run_worker_first = ["/api/*"]
 [[d1_databases]]
 binding = "DB"
 database_name = "ahmed"
-database_id = "0e27417d-14ac-4112-af1d-8c722778745f"
+database_id = "65c7e155-ddbb-479c-a9f8-e1af183eaef7"
 migrations_dir = "migrations"
 
 [vars]

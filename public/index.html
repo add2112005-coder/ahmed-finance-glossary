@@ -48,6 +48,27 @@ body{background:var(--paper);color:var(--ink)}
  .sidebar{background:#fffdf9;color:#171717}
 }
 
+
+/* Responsive layout repair: top navigation, full-width content */
+.app{display:block!important;width:100%;min-height:100vh;}
+.sidebar{position:relative!important;inset:auto!important;transform:none!important;width:100%!important;min-height:0;padding:16px clamp(16px,4vw,56px)!important;display:flex!important;flex-direction:row!important;align-items:center!important;justify-content:space-between!important;flex-wrap:wrap;gap:16px!important;border-left:0!important;border-bottom:1px solid var(--line);box-shadow:none!important;}
+.brand{flex:0 0 auto;padding:0!important;}
+.navgroup{display:flex!important;flex-direction:row;align-items:center;flex-wrap:wrap;gap:6px!important;}
+.navlabel{display:none!important;}
+.navbtn{white-space:nowrap;padding:10px 13px!important;border-radius:10px!important;font-size:13px!important;}
+.navbtn.active{box-shadow:inset 0 -3px #e7772d!important;background:#f5f2eb!important;}
+.sidebarbottom{display:none!important;}
+.main{display:block;width:100%;max-width:1600px;margin:0 auto;padding:28px clamp(16px,4vw,64px) 48px!important;min-width:0;}
+.topbar{width:100%;}
+.page{width:100%;min-width:0;}
+.welcome{width:100%;min-width:0;}
+.stats{grid-template-columns:repeat(4,minmax(0,1fr));}
+.quickgrid{grid-template-columns:repeat(3,minmax(0,1fr));}
+.termgrid{grid-template-columns:repeat(2,minmax(0,1fr));}
+.sidebarveil{display:none!important;}
+.mobilemenu{display:none!important;}
+@media(max-width:1000px){.sidebar{align-items:flex-start!important}.brand{width:100%;}.navgroup{width:100%;}.stats{grid-template-columns:repeat(2,minmax(0,1fr));}.quickgrid,.topicgrid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media(max-width:640px){.sidebar{padding:14px!important;gap:12px!important}.navgroup{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));}.navbtn{justify-content:center;white-space:normal;text-align:center;padding:10px 7px!important;font-size:12px!important}.main{padding:20px 14px 32px!important}.topbar{align-items:flex-start}.page-title{font-size:21px}.stats,.quickgrid,.termgrid,.topicgrid,.progress-layout{grid-template-columns:1fr!important}.welcome{padding:22px!important;display:block}.welcome h2{font-size:22px}.searchbar{flex-direction:column}.panel{padding:15px}.flashcard{padding:24px 16px}.top-actions .status-pill{display:none}}
 </style></head>
 <body>
 <div class="app">
