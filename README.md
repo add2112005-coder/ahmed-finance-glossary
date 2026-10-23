@@ -32,3 +32,7 @@ Recognized headers include `English`, `English Term`, `Arabic`, `Arabic Term`, `
 - The first account bootstrap is deliberately simple for this initial private deployment. Keep access restricted until the administrator account is created.
 - Excel parsing loads SheetJS from its public CDN; deploy with internet access for XLSX import. CSV import works through the same parser.
 - Test a staging deployment before pointing a custom domain at it.
+
+
+## Installable Web App (PWA)
+The site includes a web app manifest, white-background brand icons, and a service worker. Deploy over HTTPS, open the site in Chrome/Edge, then use the install icon in the address bar or browser menu → Install app. On iPhone/iPad, open in Safari → Share → Add to Home Screen. API requests are intentionally not cached.
