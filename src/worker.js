@@ -9,7 +9,30 @@ async function userFor(req,env){const c=req.headers.get('Cookie')||'';const toke
 const requireUser=u=>u?null:json({error:'سجل الدخول أولًا.'},401);const requireAdmin=u=>!u?json({error:'سجل الدخول أولًا.'},401):u.role!=='admin'?json({error:'الصلاحية غير كافية.'},403):null;
 async function body(req){try{return await req.json()}catch{return {}}}
 async function ensureCategory(env,name){name=String(name||'General Accounting').trim()||'General Accounting';await env.DB.prepare('INSERT OR IGNORE INTO glossary_categories(name) VALUES(?)').bind(name).run();return env.DB.prepare('SELECT id FROM glossary_categories WHERE name=?').bind(name).first()}
-async function seedTerms(env){const count=await env.DB.prepare('SELECT COUNT(*) n FROM glossary_terms').first();if(count.n)return {inserted:0,existing:count.n};const res=await env.ASSETS.fetch(new Request(new URL('/terms.json','https://assets.local')));const terms=await res.json();let inserted=0;for(const t of terms){const cat=await ensureCategory(env,t.topic);await env.DB.prepare('INSERT OR IGNORE INTO glossary_terms(english,arabic,definition_en,definition_ar,category_id,difficulty,source,quality_status) VALUES(?,?,?,?,?,?,?,?)').bind(t.en||'',t.ar||'',t.definition_en||'',t.definition_ar||'',cat.id,t.difficulty||'Intermediate','seed','needs_review').run();inserted++}return {inserted,existing:0}}
+async function seedTerms(env){
+  const res=await env.ASSETS.fetch(new Request(new URL('/terms.json','https://assets.local')));
+  if(!res.ok)throw new Error('تعذر قراءة ملف المصطلحات /terms.json');
+  const terms=await res.json();
+  const count=await env.DB.prepare('SELECT COUNT(*) n FROM glossary_terms').first();
+  if(Number(count?.n||0)>=terms.length)return {inserted:0,updated:0,existing:Number(count.n),expected:terms.length,synced:true};
+  const oldRows=await env.DB.prepare('SELECT id,english FROM glossary_terms ORDER BY id').all();
+  const oldByEnglish=new Map();
+  for(const row of oldRows.results||[]){const key=String(row.english||'').trim().toLocaleLowerCase();if(key&&!oldByEnglish.has(key))oldByEnglish.set(key,row.id)}
+  const cats=new Map();
+  for(const t of terms){const name=String(t.topic||'General Accounting').trim()||'General Accounting';if(!cats.has(name))cats.set(name,(await ensureCategory(env,name)).id)}
+  let inserted=0,updated=0;
+  const statements=[];
+  for(const t of terms){
+    const en=String(t.en||'').trim();if(!en)continue;
+    const catId=cats.get(String(t.topic||'General Accounting').trim()||'General Accounting');
+    const id=oldByEnglish.get(en.toLocaleLowerCase());
+    if(id){statements.push(env.DB.prepare("UPDATE glossary_terms SET english=?,arabic=?,definition_en=?,definition_ar=?,category_id=?,difficulty=?,source='seed',updated_at=datetime('now') WHERE id=?").bind(en,t.ar||'',t.definition_en||'',t.definition_ar||'',catId,t.difficulty||'Intermediate',id));updated++}
+    else{statements.push(env.DB.prepare("INSERT OR IGNORE INTO glossary_terms(english,arabic,definition_en,definition_ar,category_id,difficulty,source,quality_status) VALUES(?,?,?,?,?,?,?,'needs_review')").bind(en,t.ar||'',t.definition_en||'',t.definition_ar||'',catId,t.difficulty||'Intermediate','seed'));inserted++}
+  }
+  for(let i=0;i<statements.length;i+=40)await env.DB.batch(statements.slice(i,i+40));
+  const finalCount=await env.DB.prepare('SELECT COUNT(*) n FROM glossary_terms').first();
+  return {inserted,updated,existing:oldRows.results?.length||0,total:Number(finalCount?.n||0),expected:terms.length,synced:Number(finalCount?.n||0)>=terms.length};
+}
 export default {async fetch(req,env){const url=new URL(req.url);if(req.method==='OPTIONS')return new Response(null,{status:204,headers:{'access-control-allow-origin':'same-origin','access-control-allow-headers':'content-type','access-control-allow-methods':'GET,POST,PUT,DELETE,OPTIONS'}});if(!url.pathname.startsWith('/api/'))return env.ASSETS.fetch(req);try{
 const user=await userFor(req,env),path=url.pathname,method=req.method;
 if(path==='/api/health')return json({ok:true,service:'Ahmed Accounting Glossary'});
@@ -19,7 +42,7 @@ if(path==='/api/auth/register'&&method==='POST'){const b=await body(req),name=St
 if(path==='/api/auth/login'&&method==='POST'){const b=await body(req),email=String(b.email||'').trim().toLowerCase(),password=String(b.password||'');const u=await env.DB.prepare('SELECT * FROM glossary_users WHERE email=?').bind(email).first();if(!u||!(await verifyPassword(password,u.password_hash)))return json({error:'البريد الإلكتروني أو كلمة المرور غير صحيحة.'},401);return createSession(u.id,u.name,u.email,u.role,env)}
 if(path==='/api/auth/logout'&&method==='POST'){const c=req.headers.get('Cookie')||'',token=(c.match(/(?:^|;\s*)glossary_session=([^;]+)/)||[])[1];if(token)await env.DB.prepare('DELETE FROM glossary_sessions WHERE token_hash=?').bind(await sha(decodeURIComponent(token))).run();return new Response(JSON.stringify({ok:true}),{headers:{'content-type':'application/json','set-cookie':'glossary_session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0'}})}
 if(path==='/api/auth/me'&&method==='GET')return json({user});
-if(path==='/api/terms'&&method==='GET'){const q=String(url.searchParams.get('q')||'').trim(),category=url.searchParams.get('category');let sql='SELECT t.*,c.name topic FROM glossary_terms t LEFT JOIN glossary_categories c ON c.id=t.category_id WHERE 1=1',args=[];if(q){sql+=' AND (t.english LIKE ? OR t.arabic LIKE ? OR t.definition_en LIKE ? OR t.definition_ar LIKE ?)';args.push(...Array(4).fill(`%${q}%`))}if(category&&category!=='all'){sql+=' AND c.name=?';args.push(category)}sql+=' ORDER BY t.english LIMIT 5000';const rows=await env.DB.prepare(sql).bind(...args).all();return json({terms:rows.results.map(cleanTerm),total:rows.results.length})}
+if(path==='/api/terms'&&method==='GET'){const dbCount=await env.DB.prepare('SELECT COUNT(*) n FROM glossary_terms').first();if(Number(dbCount?.n||0)<888)await seedTerms(env);const q=String(url.searchParams.get('q')||'').trim(),category=url.searchParams.get('category');let sql='SELECT t.*,c.name topic FROM glossary_terms t LEFT JOIN glossary_categories c ON c.id=t.category_id WHERE 1=1',args=[];if(q){sql+=' AND (t.english LIKE ? OR t.arabic LIKE ? OR t.definition_en LIKE ? OR t.definition_ar LIKE ?)';args.push(...Array(4).fill(`%${q}%`))}if(category&&category!=='all'){sql+=' AND c.name=?';args.push(category)}sql+=' ORDER BY t.english LIMIT 5000';const rows=await env.DB.prepare(sql).bind(...args).all();return json({terms:rows.results.map(cleanTerm),total:rows.results.length})}
 if(path==='/api/categories'&&method==='GET'){const rows=await env.DB.prepare('SELECT c.id,c.name,c.description,COUNT(t.id) term_count FROM glossary_categories c LEFT JOIN glossary_terms t ON t.category_id=c.id GROUP BY c.id ORDER BY c.name').all();return json({categories:rows.results})}
 if(path==='/api/review-dashboard'&&method==='GET'){const e=requireUser(user);if(e)return e;const s=await env.DB.prepare("SELECT COUNT(*) total,COALESCE(SUM(CASE WHEN due_at<=datetime('now') THEN 1 ELSE 0 END),0) due,COALESCE(SUM(CASE WHEN repetitions=0 AND correct_count=0 AND wrong_count=0 THEN 1 ELSE 0 END),0) new_terms,COALESCE(SUM(correct_count),0) correct,COALESCE(SUM(wrong_count),0) wrong,COALESCE(SUM(CASE WHEN repetitions>0 THEN 1 ELSE 0 END),0) learned FROM glossary_reviews WHERE user_id=?").bind(user.id).first();return json({summary:s,accuracy:(Number(s.correct)+Number(s.wrong))?Math.round(Number(s.correct)/(Number(s.correct)+Number(s.wrong))*100):0})}
 if(path==='/api/reviews'&&method==='GET'){const e=requireUser(user);if(e)return e;const rows=await env.DB.prepare("SELECT r.*,t.english en,t.arabic ar,t.definition_en,t.definition_ar,c.name topic FROM glossary_reviews r JOIN glossary_terms t ON t.id=r.term_id LEFT JOIN glossary_categories c ON c.id=t.category_id WHERE r.user_id=? AND r.due_at<=datetime('now') ORDER BY r.due_at LIMIT 300").bind(user.id).all();return json({reviews:rows.results})}

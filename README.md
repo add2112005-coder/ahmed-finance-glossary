@@ -21,7 +21,7 @@ This project is wired to the D1 database configured in `wrangler.toml` (`ahmed`,
 4. Apply the migration: `wrangler d1 migrations apply ahmed --remote`
 5. Deploy: `wrangler deploy`
 6. Open the deployed URL and create the first account. That first account receives the admin role. **Create that account yourself first and do not share the site before it exists.**
-7. The site seeds the glossary from `public/terms.json` into D1 on first load. You can also use the Admin page to import updated Excel/CSV files.
+7. The site synchronizes the glossary from `public/terms.json` into D1 when the public terms API is called and the database contains fewer than the 888 source terms. This also backfills an existing partially populated database (for example, one with 133 terms). You can also use the Admin page to import updated Excel/CSV files.
 
 ## Excel columns
 Recognized headers include `English`, `English Term`, `Arabic`, `Arabic Term`, `Definition_EN`, `English Definition`, `Definition_AR`, `Arabic Definition`, and `Category`/`Topic`. Unknown/missing translations and definitions are marked as needing review.

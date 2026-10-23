@@ -1,5 +1,5 @@
 // Robust PWA service worker: one missing/slow optional asset must not block installation.
-const CACHE = 'ahmed-finance-glossary-v2';
+const CACHE = 'ahmed-finance-glossary-v3';
 const SHELL = [
   '/index.html',
   '/search.html',
